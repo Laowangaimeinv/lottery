@@ -1,0 +1,33 @@
+name: 更新彩票开奖数据
+
+on:
+  schedule:
+    # 北京时间 22:30（UTC 14:30）每日执行，覆盖双色球/大乐透开奖后
+    - cron: '30 14 * * *'
+  workflow_dispatch: {}   # 允许在 Actions 页面手动触发（首次部署后可立即运行）
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: 检出仓库
+        uses: actions/checkout@v4
+
+      - name: 配置 Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: 抓取最新开奖并合并
+        run: node scripts/fetch.js
+
+      - name: 提交变更（如有）
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: 'chore: 自动更新彩票开奖数据'
+          file_pattern: 'data/lottery.json'
+          commit_author: 'lottery-bot <actions@github.com>'
