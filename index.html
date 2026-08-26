@@ -43,15 +43,22 @@
     <section id="trend" class="panel">
       <h2 class="section-title">号码走势图</h2>
       <div class="trend-controls">
-        <label>显示期数：</label>
-        <select id="trendRange">
-          <option value="10">近 10 期</option>
-          <option value="20">近 20 期</option>
-          <option value="all" selected>全部</option>
-        </select>
+        <div class="view-switch" role="tablist" aria-label="走势图视图">
+          <button class="view-btn active" data-view="table">基本走势</button>
+          <button class="view-btn" data-view="line">折线走势</button>
+        </div>
+        <label class="range-label">显示期数：
+          <select id="trendRange">
+            <option value="30">近 30 期</option>
+            <option value="50" selected>近 50 期</option>
+            <option value="all">全部</option>
+          </select>
+        </label>
+        <label class="link-toggle"><input type="checkbox" id="trendLinks" checked /> 显示连线</label>
       </div>
-      <div id="trendCharts" class="trend-charts"></div>
-      <p class="hint">说明：每条彩线代表该位置（第1~第N个球）开出的号码大小，纵轴为号码数值，横轴为期数（左旧右新）。</p>
+      <div id="trendTableWrap" class="trend-table-wrap"></div>
+      <div id="trendCharts" class="trend-charts" style="display:none"></div>
+      <p class="hint">说明：表格为官网同款「基本走势图」。开出的号码以彩球显示，未开出的格内数字为该号码的遗漏期数（即距上次开出隔了多少期）。最新一期显示在最上方。</p>
     </section>
 
     <!-- 遗漏 -->
