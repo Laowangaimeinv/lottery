@@ -2,7 +2,7 @@
 
 一个零依赖的纯静态网页，集成 **最新开奖、号码走势图、遗漏冷热、随机机选** 四大功能，电脑手机全适配，大字号高对比，照顾老人老花眼，号码以“球体内显示”呈现。
 
-数据由 **GitHub Actions 每日自动更新**（北京时间 22:30），数据源为公开接口开彩网 `f.apiplus.net`，无需任何 API Key。
+数据由 **GitHub Actions 每日自动更新**（北京时间 22:30）。数据源优先采用公开仓库 `gudaoxuri/lottery_history`（每日从官网抓取，经 jsDelivr / raw.githubusercontent 分发，海外 Actions runner 稳定可达），并保留开彩网 `f.apiplus.net` 作为兜底，全程无需任何 API Key。
 
 ---
 
@@ -21,7 +21,7 @@
 ├── css/style.css           # 样式（响应式 / 老人友好 / 号码球）
 ├── js/app.js               # 核心逻辑（渲染 / 走势图 / 遗漏 / 机选）
 ├── data/lottery.json       # 开奖数据（由 Actions 自动维护）
-├── scripts/fetch.js        # 抓取脚本（开彩网接口 → 去重合并）
+├── scripts/fetch.js        # 抓取脚本（多源容错：gudaoxuri 两路 CDN 取并集 + apiplus 兜底 → 去重合并）
 └── .github/workflows/update.yml  # 每日自动更新工作流
 ```
 
