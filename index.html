@@ -68,21 +68,63 @@
       <div id="missingGrids" class="missing-grids"></div>
     </section>
 
-    <!-- 机选 -->
+    <!-- 选号中心 -->
     <section id="random" class="panel">
-      <h2 class="section-title">随机机选</h2>
-      <div class="random-controls">
-        <label>注数：</label>
-        <select id="randomCount">
+      <h2 class="section-title">选号中心 · 机选 / 手选</h2>
+
+      <div class="sel-game" role="tablist" aria-label="选择彩种">
+        <button class="seg-btn seg-selgame active" data-selgame="ssq">双色球</button>
+        <button class="seg-btn seg-selgame" data-selgame="dlt">大乐透</button>
+      </div>
+
+      <div class="sel-row">
+        <div class="seg" id="inputTypeSeg" role="tablist" aria-label="输入方式">
+          <button class="seg-btn active" data-input="auto">🎲 机选</button>
+          <button class="seg-btn" data-input="manual">✋ 手选</button>
+        </div>
+        <div class="seg" id="playSeg" role="tablist" aria-label="玩法">
+          <button class="seg-btn active" data-play="single">单式</button>
+          <button class="seg-btn" data-play="compound">复式</button>
+          <button class="seg-btn" data-play="banker">胆拖</button>
+        </div>
+      </div>
+
+      <div class="sel-param" id="autoParam">
+        <label>生成注数：</label>
+        <select id="autoCount">
           <option value="1">1 注</option>
           <option value="3">3 注</option>
           <option value="5" selected>5 注</option>
           <option value="10">10 注</option>
         </select>
-        <button id="randomBtn" class="btn-primary">摇一摇机选</button>
-        <button id="copyBtn" class="btn-ghost">复制全部</button>
+        <span class="sel-tip">机选随机生成</span>
       </div>
-      <div id="randomResults" class="random-results"></div>
+
+      <div class="sel-manual" id="manualArea"></div>
+
+      <div class="sel-multi">
+        <span class="multi-label">倍数</span>
+        <button id="multiMinus" class="step-btn" aria-label="减少倍数">−</button>
+        <span id="multiVal" class="multi-val">1</span>
+        <button id="multiPlus" class="step-btn" aria-label="增加倍数">+</button>
+      </div>
+
+      <div class="sel-actions">
+        <button id="genBtn" class="btn-primary">✨ 生成选号</button>
+        <button id="resetBtn" class="btn-ghost">清空</button>
+      </div>
+
+      <div id="selMsg" class="sel-msg"></div>
+      <div id="selPreview" class="sel-preview"></div>
+
+      <div class="sel-save" id="saveArea" style="display:none">
+        <div class="save-actions">
+          <button id="saveImgBtn" class="btn-primary">📷 保存 / 下载图片</button>
+          <button id="copySlipBtn" class="btn-ghost">📋 复制文字</button>
+        </div>
+        <p class="hint">手机端可<b>长按下方图片</b>保存到相册，再在微信聊天中发送即可分享。</p>
+        <div class="slip-img-wrap"><img id="slipImg" class="slip-img" alt="选号单图片" /></div>
+      </div>
     </section>
   </main>
 
