@@ -314,8 +314,8 @@ function renderTrendTable() {
   wrap.appendChild(scroll);
 
   requestAnimationFrame(() => {
-    svg.setAttribute('width', scroll.scrollWidth);
-    svg.setAttribute('height', scroll.scrollHeight);
+    svg.setAttribute('width', table.scrollWidth || table.offsetWidth);
+    svg.setAttribute('height', table.scrollHeight || table.offsetHeight);
     drawTrendLinks();
   });
 }
@@ -392,7 +392,23 @@ function renderMissing() {
   }
 }
 
-/* ============ 机选 ============ */
+/* ============ 选号中心（机选/手选 · 单式/复式/胆拖）============ */
+const ZONE = {
+  ssq: [
+    { key: 'red',  name: '红球', min: 6, max: 33, color: 'red' },
+    { key: 'blue', name: '蓝球', min: 1, max: 16, color: 'blue' }
+  ],
+  dlt: [
+    { key: 'front', name: '前区', min: 5, max: 35, color: 'red' },
+    { key: 'back',  name: '后区', min: 2, max: 12, color: 'blue' }
+  ]
+};
+const MAX_NOTES = 300;   // 生成注数上限（防爆炸）
+const IMG_MAX = 140;     // 图片最多绘制的注数
+const selState = { game: 'ssq', input: 'auto', play: 'single', autoCount: 5, multiple: 1, picks: {} };
+let lastNotes = [];
+let lastDataURL = '';
+
 function sampleUnique(count, max) {
   const pool = Array.from({ length: max }, (_, i) => i + 1);
   for (let i = pool.length - 1; i > 0; i--) {
@@ -401,50 +417,322 @@ function sampleUnique(count, max) {
   }
   return pool.slice(0, count).sort((a, b) => a - b);
 }
-
-function generateOne() {
-  return GAME[state.game].randomGroups.map(g => ({ key: g.key, cls: g.cls, nums: sampleUnique(g.n, g.max) }));
+function sampleFrom(pool, k) {
+  const a = pool.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a.slice(0, k);
+}
+function combinations(arr, k) {
+  const res = [];
+  const rec = (start, combo) => {
+    if (combo.length === k) { res.push(combo.slice()); return; }
+    for (let i = start; i < arr.length; i++) { combo.push(arr[i]); rec(i + 1, combo); combo.pop(); }
+  };
+  rec(0, []);
+  return res;
 }
 
-let lastRandom = [];
-function renderRandom() {
-  const count = parseInt($('#randomCount').value, 10);
-  const host = $('#randomResults');
-  lastRandom = [];
-  for (let i = 0; i < count; i++) lastRandom.push(generateOne());
-
-  host.innerHTML = lastRandom.map((groups, idx) => {
-    const balls = groups.map((g, gi) =>
-      (gi > 0 ? '<span class="plus">+</span>' : '') + ballsRowHTML(g.nums, g.cls)
-    ).join('');
-    return `<div class="r-card"><span class="rno">${idx + 1}.</span>${balls}</div>`;
-  }).join('');
+/* 把一个区的选择展开成「若干组完整号码」（每组长度 = min） */
+function expandZone(zone, sel) {
+  const min = zone.min;
+  if (sel.kind === 'combo') {
+    const set = [...sel.set].sort((a, b) => a - b);
+    if (set.length < min) return null;
+    return combinations(set, min);
+  }
+  // 胆拖
+  const b = [...sel.banker].sort((a, b) => a - b);
+  const d = [...sel.drag].sort((a, b) => a - b);
+  if (b.length >= min) return [b.slice(0, min)];
+  const need = min - b.length;
+  if (d.length < need) return null;
+  return combinations(d, need).map(c => [...b, ...c]);
 }
 
-async function copyRandom() {
-  if (!lastRandom.length) return;
-  const game = GAME[state.game].label;
-  const lines = lastRandom.map((groups, idx) => {
-    const parts = groups.map(g => fmtNums(g.nums));
-    return `第${idx + 1}注 ${game}：` + parts.join(' + ');
-  });
-  const text = lines.join('\n');
-  try {
-    await navigator.clipboard.writeText(text);
-    flashCopy('已复制');
-  } catch (e) {
-    const ta = document.createElement('textarea');
-    ta.value = text; document.body.appendChild(ta); ta.select();
-    try { document.execCommand('copy'); flashCopy('已复制'); }
-    catch (_) { flashCopy('复制失败，请手动选择'); }
-    document.body.removeChild(ta);
+function explodeOne(g, sel) {
+  const zones = ZONE[g];
+  const perZone = [];
+  for (const z of zones) {
+    const ex = expandZone(z, sel[z.key]);
+    if (!ex) return { error: zoneErr(z, sel[z.key]) };
+    perZone.push(ex);
+  }
+  let notes = [[]];
+  for (const ex of perZone) {
+    const next = [];
+    for (const n of notes) for (const e of ex) next.push([...n, e]);
+    notes = next;
+  }
+  return { notes };
+}
+function zoneErr(z, sel) {
+  if (sel.kind === 'combo') return `${z.name}至少选 ${z.min} 个（当前 ${sel.set.length} 个）`;
+  const need = z.min - sel.banker.length;
+  return `${z.name}胆码 ${sel.banker.length} 个，拖码需 ≥ ${need} 个（当前 ${sel.drag.length} 个）`;
+}
+
+/* 手选状态 */
+function ensurePicks() {
+  const g = selState.game, play = selState.play;
+  selState.picks[g] = selState.picks[g] || {};
+  for (const z of ZONE[g]) {
+    if (!selState.picks[g][z.key] || selState.picks[g][z.key].type !== play) {
+      selState.picks[g][z.key] = { type: play, nums: new Set(), banker: new Set(), drag: new Set() };
+    }
   }
 }
-function flashCopy(msg) {
-  const btn = $('#copyBtn');
-  const old = btn.textContent;
-  btn.textContent = msg;
-  setTimeout(() => { btn.textContent = old; }, 1500);
+function buildSelFromManual() {
+  const g = selState.game, play = selState.play;
+  const sel = {};
+  for (const z of ZONE[g]) {
+    const p = (selState.picks[g] && selState.picks[g][z.key]) || { nums: new Set(), banker: new Set(), drag: new Set() };
+    if (play === 'banker') {
+      sel[z.key] = { kind: 'banker', banker: [...p.banker].sort((a, b) => a - b), drag: [...p.drag].sort((a, b) => a - b) };
+    } else {
+      sel[z.key] = { kind: 'combo', set: [...p.nums].sort((a, b) => a - b) };
+    }
+  }
+  return sel;
+}
+
+/* 机选：根据玩法生成若干组选择 */
+function autoSels() {
+  const g = selState.game, play = selState.play, count = selState.autoCount;
+  const zones = ZONE[g];
+  const out = [];
+  for (let i = 0; i < count; i++) {
+    const sel = {};
+    for (const z of zones) {
+      if (play === 'single') {
+        sel[z.key] = { kind: 'combo', set: sampleUnique(z.min, z.max) };
+      } else if (play === 'compound') {
+        const cap = (z.key === 'red' || z.key === 'front') ? 4 : 3;
+        const c = Math.min(z.max, z.min + 1 + Math.floor(Math.random() * cap));
+        sel[z.key] = { kind: 'combo', set: sampleUnique(c, z.max) };
+      } else { // 胆拖
+        const bk = 1 + Math.floor(Math.random() * (z.min - 1));
+        const need = z.min - bk;
+        const dr = need + 1 + Math.floor(Math.random() * 3);
+        const all = Array.from({ length: z.max }, (_, i) => i + 1);
+        const banker = sampleUnique(bk, z.max);
+        const rest = all.filter(x => !banker.includes(x));
+        const drag = sampleFrom(rest, Math.min(dr, rest.length));
+        sel[z.key] = { kind: 'banker', banker, drag };
+      }
+    }
+    out.push(sel);
+  }
+  return out;
+}
+
+function generateSel() {
+  const sels = (selState.input === 'auto') ? autoSels() : [buildSelFromManual()];
+  let notes = [];
+  for (const sel of sels) {
+    const r = explodeOne(selState.game, sel);
+    if (r.error) { selMsg(r.error, 'bad'); return; }
+    notes = notes.concat(r.notes);
+  }
+  if (!notes.length) { selMsg('未生成任何注，请检查选号', 'bad'); return; }
+  let truncated = false;
+  if (notes.length > MAX_NOTES) { notes = notes.slice(0, MAX_NOTES); truncated = true; }
+  lastNotes = notes;
+  renderSlipPreview(notes, truncated);
+  drawSlip(notes, truncated);
+  selMsg(`已生成 ${notes.length} 注${truncated ? '（注数较多，仅显示前 ' + MAX_NOTES + ' 注）' : ''}`, 'ok');
+}
+
+function renderSlipPreview(notes, truncated) {
+  const g = selState.game;
+  const host = $('#selPreview');
+  const total = notes.length * selState.multiple;
+  let html = `<div class="slip-head">共 <b>${notes.length}</b> 注 · 倍数 ×${selState.multiple} · 合计 <b>${total * 2}</b> 元</div>`;
+  notes.forEach((note, idx) => {
+    const parts = ZONE[g].map((z, zi) => ballsRowHTML(note[zi], z.color)).join('<span class="plus">+</span>');
+    html += `<div class="r-card"><span class="rno">${idx + 1}</span>${parts}</div>`;
+  });
+  if (truncated) html += `<div class="empty-tip">注数较多，仅显示前 ${MAX_NOTES} 注。</div>`;
+  host.innerHTML = html;
+  $('#saveArea').style.display = '';
+}
+
+/* 绘制选号单图片（编号一律黑色字体，红/蓝仅用球圈颜色区分） */
+function drawBall(ctx, cx, cy, r, num, ring) {
+  ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.fillStyle = '#fff'; ctx.fill();
+  ctx.lineWidth = 3; ctx.strokeStyle = ring; ctx.stroke();
+  ctx.fillStyle = '#111';
+  ctx.font = `bold ${Math.round(r * 1.0)}px "PingFang SC","Microsoft YaHei",sans-serif`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(pad2(num), cx, cy + 1);
+}
+function drawSlip(notes, truncated) {
+  const g = selState.game;
+  const zones = ZONE[g];
+  const W = 720, scale = 2, padX = 40, ballR = 26, rowH = 78;
+  const headerH = 196, footerH = 104;
+  const drawn = notes.slice(0, IMG_MAX);
+  const H = headerH + drawn.length * rowH + footerH;
+  const canvas = document.createElement('canvas');
+  canvas.width = W * scale; canvas.height = H * scale;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(scale, scale);
+  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = '#f7f9fc'; ctx.fillRect(0, 0, W, headerH);
+  ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+  ctx.fillStyle = '#111';
+  ctx.font = 'bold 40px "PingFang SC","Microsoft YaHei",sans-serif';
+  ctx.fillText((g === 'ssq' ? '双色球' : '大乐透') + ' · 选号单', padX, 66);
+  const now = new Date();
+  const dateStr = now.getFullYear() + '-' + pad2(now.getMonth() + 1) + '-' + pad2(now.getDate());
+  ctx.fillStyle = '#444'; ctx.font = '22px "PingFang SC",sans-serif';
+  ctx.fillText('生成日期：' + dateStr + '　倍数 ×' + selState.multiple, padX, 104);
+  ctx.fillText('共 ' + notes.length + ' 注　合计 ' + (notes.length * selState.multiple * 2) + ' 元（2元/注）', padX, 136);
+  if (truncated) { ctx.fillStyle = '#c62828'; ctx.fillText('（注数较多，仅显示前 ' + IMG_MAX + ' 注）', padX, 168); }
+  ctx.strokeStyle = '#dde3ee'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(padX, headerH - 16); ctx.lineTo(W - padX, headerH - 16); ctx.stroke();
+  let y = headerH + rowH / 2;
+  drawn.forEach((note, idx) => {
+    ctx.fillStyle = '#111'; ctx.font = 'bold 26px "PingFang SC",sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    ctx.fillText('注' + (idx + 1), padX, y);
+    let x = padX + 96;
+    zones.forEach((z, zi) => {
+      note[zi].forEach(n => { drawBall(ctx, x, y, ballR, n, z.color === 'blue' ? '#1d6fb8' : '#e23b3b'); x += ballR * 2 + 14; });
+      x += 18;
+    });
+    y += rowH;
+  });
+  const fy = H - footerH + 40;
+  ctx.fillStyle = '#8a93a6'; ctx.font = '18px "PingFang SC",sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+  ctx.fillText('本选号单由「彩票开奖助手」生成，仅供娱乐参考，请理性购彩。', padX, fy);
+  ctx.fillText('数据来源：公开开奖接口 · GitHub Pages 托管', padX, fy + 26);
+  lastDataURL = canvas.toDataURL('image/png');
+  $('#slipImg').src = lastDataURL;
+}
+
+function saveSlip() {
+  if (!lastDataURL) { selMsg('请先生成选号', 'bad'); return; }
+  const now = new Date();
+  const a = document.createElement('a');
+  a.href = lastDataURL;
+  a.download = `选号单_${selState.game}_${now.getFullYear()}${pad2(now.getMonth() + 1)}${pad2(now.getDate())}.png`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  selMsg('已开始下载图片', 'ok');
+}
+function copySlip() {
+  if (!lastNotes.length) { selMsg('请先生成选号', 'bad'); return; }
+  const g = selState.game;
+  const text = lastNotes.map((note, idx) =>
+    '注' + (idx + 1) + '：' + ZONE[g].map((z, zi) => note[zi].map(pad2).join(' ')).join(' + ')
+  ).join('\n');
+  try {
+    navigator.clipboard.writeText(text).then(() => selMsg('已复制全部选号', 'ok'), () => selMsg('复制失败，请手动选择', 'bad'));
+  } catch (e) { selMsg('复制失败，请手动选择', 'bad'); }
+}
+function selMsg(text, type) {
+  const el = $('#selMsg');
+  el.textContent = text;
+  el.className = 'sel-msg' + (type ? ' ' + type : '');
+  if (text) { clearTimeout(el._t); el._t = setTimeout(() => { el.textContent = ''; el.className = 'sel-msg'; }, 3500); }
+}
+function resetSel() {
+  selState.picks = {}; lastNotes = []; lastDataURL = '';
+  $('#selPreview').innerHTML = ''; $('#saveArea').style.display = 'none'; $('#selMsg').textContent = '';
+  if (selState.input === 'manual') renderManualArea();
+}
+
+/* 手选区渲染 */
+function renderManualArea() {
+  const area = $('#manualArea');
+  if (selState.input !== 'manual') { area.style.display = 'none'; area.innerHTML = ''; return; }
+  area.style.display = '';
+  ensurePicks();
+  const g = selState.game, play = selState.play, zones = ZONE[g];
+  let html = `<p class="hint">手选模式：点击号码进行选择。${play === 'banker' ? '「胆码」必出、「拖码」与其组合出号。' : '（每种至少选 ' + zones.map(z => z.min).join(' / ') + ' 个）'}</p>`;
+  for (const z of zones) {
+    const p = selState.picks[g][z.key];
+    if (play === 'banker') {
+      html += zoneBlock(g, z, p, 'banker');
+      html += zoneBlock(g, z, p, 'drag');
+    } else {
+      html += zoneBlock(g, z, p, 'single');
+    }
+  }
+  area.innerHTML = html;
+}
+function zoneBlock(g, z, p, role) {
+  const isBanker = role === 'banker', isDrag = role === 'drag';
+  const set = isBanker ? p.banker : isDrag ? p.drag : p.nums;
+  const label = isBanker ? '胆码' : isDrag ? '拖码' : z.name;
+  let statusCls = '', statusTxt = '';
+  if (!isBanker && !isDrag) {
+    const ok = set.size >= z.min;
+    statusCls = ok ? 'ok' : 'bad';
+    statusTxt = `${set.size} / 至少 ${z.min}`;
+  } else if (isBanker) {
+    statusCls = set.size > 0 ? 'ok' : 'bad';
+    statusTxt = `胆 ${set.size}`;
+  } else {
+    statusTxt = `拖 ${set.size}`;
+  }
+  let cells = '';
+  for (let n = 1; n <= z.max; n++) {
+    const on = set.has(n);
+    let cls = 'num-pick';
+    if (isBanker) { if (on) cls += ' banker-on'; }
+    else if (isDrag) { if (on) cls += ' drag-on'; }
+    else { if (on) cls += ' on'; }
+    cells += `<button class="${cls}" data-zone="${z.key}" data-num="${n}" data-role="${role}">${pad2(n)}</button>`;
+  }
+  return `<div class="zone-block">
+    <div class="zone-head">
+      <span class="zone-name ${z.color}">${label}</span>
+      ${isBanker || isDrag ? `<span class="role-label ${role}">${label}</span>` : ''}
+      <span class="zone-count ${statusCls}">${statusTxt}</span>
+    </div>
+    <div class="num-grid ${z.color}">${cells}</div>
+  </div>`;
+}
+
+/* 选号面板整体渲染 */
+function renderSelection() {
+  ensurePicks();
+  $$('.seg-selgame').forEach(b => b.classList.toggle('active', b.dataset.selgame === selState.game));
+  $$('#inputTypeSeg .seg-btn').forEach(b => b.classList.toggle('active', b.dataset.input === selState.input));
+  $$('#playSeg .seg-btn').forEach(b => b.classList.toggle('active', b.dataset.play === selState.play));
+  $('#autoParam').style.display = selState.input === 'auto' ? '' : 'none';
+  $('#multiVal').textContent = selState.multiple;
+  if (selState.input === 'manual') renderManualArea(); else $('#manualArea').innerHTML = '';
+}
+
+/* 选号面板事件绑定 */
+function bindSelectionEvents() {
+  $$('.seg-selgame').forEach(b => b.addEventListener('click', () => { selState.game = b.dataset.selgame; renderSelection(); }));
+  $$('#inputTypeSeg .seg-btn').forEach(b => b.addEventListener('click', () => { selState.input = b.dataset.input; renderSelection(); }));
+  $$('#playSeg .seg-btn').forEach(b => b.addEventListener('click', () => { selState.play = b.dataset.play; renderSelection(); }));
+  $('#autoCount').addEventListener('change', e => { selState.autoCount = parseInt(e.target.value, 10); });
+  $('#multiMinus').addEventListener('click', () => { selState.multiple = Math.max(1, selState.multiple - 1); $('#multiVal').textContent = selState.multiple; });
+  $('#multiPlus').addEventListener('click', () => { selState.multiple = Math.min(99, selState.multiple + 1); $('#multiVal').textContent = selState.multiple; });
+  $('#genBtn').addEventListener('click', generateSel);
+  $('#resetBtn').addEventListener('click', resetSel);
+  $('#saveImgBtn').addEventListener('click', saveSlip);
+  $('#copySlipBtn').addEventListener('click', copySlip);
+  $('#manualArea').addEventListener('click', e => {
+    const btn = e.target.closest('.num-pick'); if (!btn) return;
+    const zone = btn.dataset.zone, num = +btn.dataset.num;
+    const p = selState.picks[selState.game][zone];
+    if (selState.play === 'banker') {
+      const set = btn.dataset.role === 'banker' ? p.banker : p.drag;
+      const other = btn.dataset.role === 'banker' ? p.drag : p.banker;
+      if (other.has(num)) other.delete(num);
+      set.has(num) ? set.delete(num) : set.add(num);
+    } else {
+      p.nums.has(num) ? p.nums.delete(num) : p.nums.add(num);
+    }
+    renderManualArea();
+  });
 }
 
 /* ============ 切换与控制 ============ */
@@ -452,7 +740,7 @@ function renderCurrent() {
   if (state.tab === 'latest') renderLatest();
   else if (state.tab === 'trend') renderTrend();
   else if (state.tab === 'missing') renderMissing();
-  else if (state.tab === 'random') renderRandom();
+  else if (state.tab === 'random') renderSelection();
 }
 
 function bindEvents() {
@@ -480,8 +768,7 @@ function bindEvents() {
   $('#trendLinks').addEventListener('change', () => {
     if (state.tab === 'trend' && state.trendView === 'table') drawTrendLinks();
   });
-  $('#randomBtn').addEventListener('click', renderRandom);
-  $('#copyBtn').addEventListener('click', copyRandom);
+  bindSelectionEvents();
 
   let rt;
   window.addEventListener('resize', () => {
