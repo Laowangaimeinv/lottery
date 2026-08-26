@@ -243,6 +243,10 @@ main { max-width: 980px; margin: 0 auto; padding: 22px 14px 40px; }
 .ball .plus { margin: 0 4px; color: var(--ink-soft); font-weight: 700; }
 
 /* 最新开奖 */
+/* 最新开奖区内的彩种切换 */
+.latest-game { display: flex; gap: 12px; justify-content: center; margin-bottom: 16px; }
+.latest-game .seg-btn { flex: 1; max-width: 240px; }
+
 .latest-main {
   position: relative;
   background: var(--panel);
