@@ -423,16 +423,17 @@ select:focus-visible { outline: none; border-color: var(--brand); box-shadow: 0 
 .trend-table th.num { font-weight: 700; color: #6b7280; font-size: 13px; }
 .trend-table th.sep, .trend-table td.sep { border-left: 2px solid #d7deea; }
 
-/* 左列（期号/日期）吸左 */
+/* 左列（期号/日期）吸左——字号更紧凑、不换行 */
 .trend-table th.col-issue, .trend-table td.col-issue {
   position: sticky; left: 0; z-index: 4;
-  background: #eef2fa; min-width: 84px; max-width: 84px;
+  background: #eef2fa; min-width: 70px; max-width: 70px;
   font-weight: 800; color: #333;
+  font-size: 11px; padding: 0 3px; white-space: nowrap;
 }
 .trend-table th.col-date, .trend-table td.col-date {
-  position: sticky; left: 84px; z-index: 4;
-  background: #eef2fa; min-width: 98px; max-width: 98px;
-  font-size: 13px; color: #557;
+  position: sticky; left: 70px; z-index: 4;
+  background: #eef2fa; min-width: 90px; max-width: 90px;
+  font-size: 11px; color: #557; padding: 0 3px; white-space: nowrap;
 }
 .trend-table thead th.col-issue, .trend-table thead th.col-date { z-index: 6; }
 
@@ -669,6 +670,18 @@ select:focus-visible { outline: none; border-color: var(--brand); box-shadow: 0 
   .seg-btn { font-size: .98rem; }
   .sel-row { gap: 10px; }
   .seg .seg-btn { padding: 8px 12px; }
+
+  /* 手机端：顶栏固定，上滑查看走势图时收起，下滑恢复 */
+  .topbar {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 50;
+    transition: transform .28s ease;
+    will-change: transform;
+  }
+  main { padding-top: var(--header-h, 256px); transition: padding-top .28s ease; }
+  .topbar.head-hidden { transform: translateY(-105%); }
+  .topbar.head-hidden ~ main { padding-top: 0; }
 }
 @media (min-width: 900px) {
   .ball { width: 54px; height: 54px; font-size: 1.28rem; }
