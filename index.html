@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>彩票开奖 · 走势 · 机选</title>
+  <link rel="stylesheet" href="./css/style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">
+        <span class="logo">🎯</span>
+        <div class="brand-text">
+          <h1>彩票开奖助手</h1>
+          <span class="tagline">每日开奖 · 走势分析 · 智能机选</span>
+        </div>
+      </div>
+      <div class="updated">数据更新：<span id="updatedAt">加载中…</span></div>
+    </div>
+    <div class="game-switch" role="tablist" aria-label="选择彩种">
+      <button class="game-btn active" data-game="ssq">双色球</button>
+      <button class="game-btn" data-game="dlt">大乐透</button>
+    </div>
+    <nav class="tabs" aria-label="功能切换">
+      <button class="tab active" data-tab="latest"><span class="tab-ico">🏆</span>最新开奖</button>
+      <button class="tab" data-tab="trend"><span class="tab-ico">📈</span>走势图</button>
+      <button class="tab" data-tab="missing"><span class="tab-ico">🔥</span>遗漏</button>
+      <button class="tab" data-tab="random"><span class="tab-ico">🎲</span>机选</button>
+    </nav>
+  </header>
+
+  <main>
+    <!-- 最新开奖 -->
+    <section id="latest" class="panel active">
+      <h2 class="section-title">最新一期开奖</h2>
+      <div id="latestMain" class="latest-main"></div>
+      <h3 class="sub-title">近期开奖</h3>
+      <div id="latestList" class="latest-list"></div>
+    </section>
+
+    <!-- 走势图 -->
+    <section id="trend" class="panel">
+      <h2 class="section-title">号码走势图</h2>
+      <div class="trend-controls">
+        <label>显示期数：</label>
+        <select id="trendRange">
+          <option value="10">近 10 期</option>
+          <option value="20">近 20 期</option>
+          <option value="all" selected>全部</option>
+        </select>
+      </div>
+      <div id="trendCharts" class="trend-charts"></div>
+      <p class="hint">说明：每条彩线代表该位置（第1~第N个球）开出的号码大小，纵轴为号码数值，横轴为期数（左旧右新）。</p>
+    </section>
+
+    <!-- 遗漏 -->
+    <section id="missing" class="panel">
+      <h2 class="section-title">号码遗漏（冷热）</h2>
+      <p class="hint">遗漏 = 该号码距上次开出已隔多少期。绿色=热号（近期常出），红色=冷号（很久未出）。</p>
+      <div id="missingGrids" class="missing-grids"></div>
+    </section>
+
+    <!-- 机选 -->
+    <section id="random" class="panel">
+      <h2 class="section-title">随机机选</h2>
+      <div class="random-controls">
+        <label>注数：</label>
+        <select id="randomCount">
+          <option value="1">1 注</option>
+          <option value="3">3 注</option>
+          <option value="5" selected>5 注</option>
+          <option value="10">10 注</option>
+        </select>
+        <button id="randomBtn" class="btn-primary">摇一摇机选</button>
+        <button id="copyBtn" class="btn-ghost">复制全部</button>
+      </div>
+      <div id="randomResults" class="random-results"></div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <p>本工具数据来源于公开接口，仅供娱乐与参考，不构成任何购彩建议。请理性投注，量力而行。</p>
+  </footer>
+
+  <script src="./js/app.js" defer></script>
+</body>
+</html>
