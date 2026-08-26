@@ -760,6 +760,7 @@ function bindEvents() {
     state.tab = t.dataset.tab;
     $$('.panel').forEach(p => p.classList.remove('active'));
     $('#' + state.tab).classList.add('active');
+    document.querySelector('.topbar').classList.remove('head-hidden');
     renderCurrent();
   }));
   $('#trendRange').addEventListener('change', renderTrend);
@@ -777,8 +778,35 @@ function bindEvents() {
   let rt;
   window.addEventListener('resize', () => {
     clearTimeout(rt);
-    rt = setTimeout(() => { if (state.tab === 'trend') renderTrend(); }, 200);
+    rt = setTimeout(() => { if (state.tab === 'trend') renderTrend(); syncHeaderH(); }, 200);
   });
+}
+
+/* 手机端：把顶栏实际高度写入 CSS 变量，供 main 顶部留白使用 */
+function syncHeaderH() {
+  if (!window.matchMedia('(max-width: 560px)').matches) return;
+  const h = document.querySelector('.topbar').offsetHeight;
+  if (h) document.documentElement.style.setProperty('--header-h', h + 'px');
+}
+
+/* 手机端：上滑时收起顶栏（释放空间看走势图），下滑或回到顶部时恢复 */
+function bindHeaderAutoHide() {
+  const topbar = document.querySelector('.topbar');
+  const apply = (y, last) => {
+    if (y > last && y > 30) topbar.classList.add('head-hidden');
+    else if (y < last) topbar.classList.remove('head-hidden');
+  };
+  let lastWin = 0;
+  window.addEventListener('scroll', () => {
+    const y = window.pageYOffset || document.documentElement.scrollTop || 0;
+    apply(y, lastWin); lastWin = y;
+  }, { passive: true });
+  const wrap = document.getElementById('trendTableWrap');
+  let lastTrend = 0;
+  wrap.addEventListener('scroll', (e) => {
+    const y = e.target.scrollTop || 0;
+    apply(y, lastTrend); lastTrend = y;
+  }, true);
 }
 
 /* ============ 初始化 ============ */
@@ -797,5 +825,7 @@ async function init() {
   // 初始化时对齐所有彩种开关的激活态（默认双色球）
   $$('.game-btn').forEach(x => x.classList.toggle('active', x.dataset.game === state.game));
   $$('.latest-game-btn').forEach(x => x.classList.toggle('active', x.dataset.game === state.game));
+  syncHeaderH();
+  bindHeaderAutoHide();
 }
 init();
