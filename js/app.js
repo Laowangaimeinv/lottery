@@ -735,6 +735,14 @@ function bindSelectionEvents() {
   });
 }
 
+/* 统一彩种切换：顶部开关 + 最新开奖区开关 双向同步 */
+function setGame(game) {
+  state.game = game;
+  $$('.game-btn').forEach(x => x.classList.toggle('active', x.dataset.game === game));
+  $$('.latest-game-btn').forEach(x => x.classList.toggle('active', x.dataset.game === game));
+  renderCurrent();
+}
+
 /* ============ 切换与控制 ============ */
 function renderCurrent() {
   if (state.tab === 'latest') renderLatest();
@@ -744,12 +752,8 @@ function renderCurrent() {
 }
 
 function bindEvents() {
-  $$('.game-btn').forEach(b => b.addEventListener('click', () => {
-    $$('.game-btn').forEach(x => x.classList.remove('active'));
-    b.classList.add('active');
-    state.game = b.dataset.game;
-    renderCurrent();
-  }));
+  $$('.game-btn').forEach(b => b.addEventListener('click', () => setGame(b.dataset.game)));
+  $$('.latest-game-btn').forEach(b => b.addEventListener('click', () => setGame(b.dataset.game)));
   $$('.tab').forEach(t => t.addEventListener('click', () => {
     $$('.tab').forEach(x => x.classList.remove('active'));
     t.classList.add('active');
@@ -790,5 +794,8 @@ async function init() {
     state.data = { ssq: [], dlt: [] };
   }
   renderCurrent();
+  // 初始化时对齐所有彩种开关的激活态（默认双色球）
+  $$('.game-btn').forEach(x => x.classList.toggle('active', x.dataset.game === state.game));
+  $$('.latest-game-btn').forEach(x => x.classList.toggle('active', x.dataset.game === state.game));
 }
 init();
