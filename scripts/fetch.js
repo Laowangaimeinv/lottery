@@ -87,36 +87,51 @@ function mapApiplusDlt(item) {
   return { issue: String(item.expect), date: String(item.opentime).split(' ')[0], front, back };
 }
 
-// ---------- 抓取（多源依次尝试）----------
-async function fetchGame(key) {
-  let lastErr;
-  for (const src of SOURCES[key]) {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
-    try {
-      const res = await fetch(src.url, {
-        signal: controller.signal,
-        headers: { 'User-Agent': 'lottery-updater/2.0' },
-      });
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-      const arr = await res.json();
-      if (!Array.isArray(arr)) throw new Error('返回非数组');
-      const out = [];
-      for (const item of arr) {
-        try { out.push(src.map(item)); } catch (_) { /* 跳过异常单条 */ }
-      }
-      if (out.length === 0) throw new Error('解析后为空');
-      console.log(`  ✓ [${key}] 源「${src.name}」成功，解析 ${out.length} 条`);
-      return out;
-    } catch (e) {
-      const cause = e.cause && e.cause.code ? ` (${e.cause.code})` : '';
-      console.warn(`  ✗ [${key}] 源「${src.name}」失败：${e.message}${cause}`);
-      lastErr = e;
-    } finally {
-      clearTimeout(timer);
+// ---------- 抓取（多源容错 + 并集）----------
+async function trySource(key, src) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  try {
+    const res = await fetch(src.url, {
+      signal: controller.signal,
+      headers: { 'User-Agent': 'lottery-updater/2.0' },
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const arr = await res.json();
+    if (!Array.isArray(arr)) throw new Error('返回非数组');
+    const out = [];
+    for (const item of arr) {
+      try { out.push(src.map(item)); } catch (_) { /* 跳过异常单条 */ }
     }
+    if (out.length === 0) throw new Error('解析后为空');
+    console.log(`  ✓ [${key}] 源「${src.name}」解析 ${out.length} 条`);
+    return out;
+  } catch (e) {
+    const cause = e.cause && e.cause.code ? ` (${e.cause.code})` : '';
+    console.warn(`  ✗ [${key}] 源「${src.name}」失败：${e.message}${cause}`);
+    return null;
+  } finally {
+    clearTimeout(timer);
   }
-  throw lastErr || new Error('所有源均失败');
+}
+
+async function fetchGame(key) {
+  const srcs = SOURCES[key];
+  const gudaoxuriSrcs = srcs.filter(s => s.name.includes('gudaoxuri'));
+  const fallbackSrcs = srcs.filter(s => !s.name.includes('gudaoxuri'));
+  const union = new Map();
+  const merge = (recs) => { if (recs) for (const r of recs) if (!union.has(r.issue)) union.set(r.issue, r); };
+
+  // 优先并集 gudaoxuri 的两路 CDN：raw（实时、无构建缓存）+ jsDelivr（稳但有缓存）
+  // 两者互补，确保不漏掉最新一期（单纯用 jsDelivr 会因缓存延迟少抓一期）
+  for (const src of gudaoxuriSrcs) merge(await trySource(key, src));
+  // 仅当 gudaoxuri 两路都失败，才回退到 apiplus（国内接口，海外 runner 常不可达）
+  if (union.size === 0) {
+    for (const src of fallbackSrcs) merge(await trySource(key, src));
+  }
+  if (union.size === 0) throw new Error('所有源均失败');
+  console.log(`  [${key}] 合并去重后共 ${union.size} 条`);
+  return Array.from(union.values());
 }
 
 // ---------- 主流程 ----------
