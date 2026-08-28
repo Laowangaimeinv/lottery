@@ -251,6 +251,8 @@ function renderTrendTable() {
 
   const scroll = document.createElement('div');
   scroll.className = 'trend-scroll';
+  const inner = document.createElement('div');
+  inner.className = 'trend-inner';
   const table = document.createElement('table');
   table.className = 'trend-table';
 
@@ -302,22 +304,30 @@ function renderTrendTable() {
   });
   table.appendChild(tbody);
 
-  // 连线层（SVG 覆盖在表格之上）
+  // 连线层（SVG 覆盖在表格之上，置于 inner 内与表格同步滚动）
   const svgNS = 'http://www.w3.org/2000/svg';
   const svg = document.createElementNS(svgNS, 'svg');
   svg.setAttribute('class', 'trend-links');
   svg.id = 'trendLinksSvg';
 
-  scroll.appendChild(table);
-  scroll.appendChild(svg);
+  inner.appendChild(table);
+  inner.appendChild(svg);
+  scroll.appendChild(inner);
   wrap.innerHTML = '';
   wrap.appendChild(scroll);
 
   requestAnimationFrame(() => {
-    svg.setAttribute('width', table.scrollWidth || table.offsetWidth);
-    svg.setAttribute('height', table.scrollHeight || table.offsetHeight);
+    svg.setAttribute('width', inner.scrollWidth || table.scrollWidth || table.offsetWidth);
+    svg.setAttribute('height', inner.scrollHeight || table.scrollHeight || table.offsetHeight);
     drawTrendLinks();
   });
+
+  // 滚动时以 rAF 节流重绘连线，保证与表格始终对齐（修复手机端图层被吞/错位）
+  let trendRaf = null;
+  scroll.addEventListener('scroll', () => {
+    if (trendRaf) cancelAnimationFrame(trendRaf);
+    trendRaf = requestAnimationFrame(drawTrendLinks);
+  }, { passive: true });
 }
 
 function drawTrendLinks() {
@@ -327,8 +337,11 @@ function drawTrendLinks() {
   if (!$('#trendLinks').checked) return;
   const wrap = $('#trendTableWrap');
   const scroll = wrap.querySelector('.trend-scroll');
-  const table = scroll.querySelector('table');
-  const base = scroll.getBoundingClientRect();
+  const inner = scroll.querySelector('.trend-inner');
+  const table = inner.querySelector('table');
+  // 以 inner 为基准：inner 是 SVG 的包含块，随内容滚动，其视口坐标与单元格同步变化，
+  // 二者之差恒为「单元格相对内容区左上角」的坐标（即 SVG 内部坐标），滚动后依然正确。
+  const base = inner.getBoundingClientRect();
   const rows = Array.from(table.querySelectorAll('tbody tr'));
   const sets = GAME[state.game].sets;
   const svgNS = 'http://www.w3.org/2000/svg';
